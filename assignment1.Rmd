@@ -1,0 +1,474 @@
+---
+title: "assignment1"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+editor_options:
+  chunk_output_type: console
+---
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+#bring it all libraries
+library(haven)
+library(tidyverse)
+library(stargazer)
+library(modelsummary)
+library(estimatr)
+library(lmtest)
+library(car)
+library(ggpubr)
+library(rstatix)
+library(tinytable)
+library(kableExtra)
+library(tinytex)
+
+#import datasets
+dhs2015_16 <- read_dta("dhs2015-16.dta")
+dhs2019_21 <- read_dta("dhs2019-21.dta")
+```
+
+## Question One
+
+### 2015/16
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+#creating labels
+labels <- c(
+  "Ever humiliated", "Ever threatened", "Ever insulted",
+  
+  "Ever pushed/shaken/thrown", "Ever slapped", "Ever punched", 
+  "Ever kicked/dragged", "Ever strangled/burnt", "Threatened with knife/gun",
+  "Arm twisted/hair pulled",
+  
+  "Forced into unwanted sex", "Forced into other unwanted sexual acts",
+  "Forced to perform unwanted sexual acts",
+
+  "Jealous if talks with men", "Accuses of unfaithfulness",
+  "Prevents meeting friends", "Limits contact with family",
+  "Insists on knowing where respondent is", "Doesn't trust with money"
+)
+
+#cleaning the dataset
+data_2016 <- dhs2015_16 |>
+  rename(region = bihar) |>
+  select(region, emo1:control6) |>
+  mutate(region = case_when(
+    region == 1 ~ "Bihar",
+    region == 0 ~ "Jharkhand")) 
+
+varnames <- names(data_2016)[-1]
+
+data_2016_renamed <- data_2016 |> 
+  rename_with(~ labels, .cols = all_of(varnames))
+
+Mean <- function(x) mean(x, na.rm = TRUE)
+SD   <- function(x) sd(x, na.rm = TRUE)
+
+#running the bihar vs jharkhand 2016 table
+datasummary(All(data_2016_renamed) ~ region * (Mean + SD), 
+            data = data_2016,
+            output = "kableExtra",
+            title = "Descriptive Statistics of Key Variables by State (Bihar vs. Jharkhand, 2015/16)") |>
+   kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+  
+#checking the t stat and p value
+vars <- data_2016_renamed |>
+  select(where(is.numeric)) |>
+  names()
+
+# Run t-tests by state and create tidy table
+results_df <- vars |>
+  lapply(function(v) {
+    t <- t.test(data_2016_renamed[[v]] ~ data_2016_renamed$region)
+    data.frame(
+      variable = v,
+      mean_diff = diff(t$estimate),  
+      p_value = t$p.value
+    )
+  }) |>
+  bind_rows()
+
+results_df |> 
+  `row.names<-`(NULL) |>  
+  kbl(caption = "T-Test Results by State (Bihar vs. Jharkhand, 2015/16)",
+      col.names = c("Variable Name", "Mean Diff", "P Value")) |>
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+
+```
+
+### 2019/21
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+#creating labels
+labels <- c(
+  "Ever humiliated", "Ever threatened", "Ever insulted",
+  
+  "Ever pushed/shaken/thrown", "Ever slapped", "Ever punched", 
+  "Ever kicked/dragged", "Ever strangled/burnt", "Threatened with knife/gun",
+  "Arm twisted/hair pulled",
+  
+  "Forced into unwanted sex", "Forced into other unwanted sexual acts",
+  "Forced to perform unwanted sexual acts",
+
+  "Jealous if talks with men", "Accuses of unfaithfulness",
+  "Prevents meeting friends", "Limits contact with family",
+  "Insists on knowing where respondent is", "Doesn't trust with money"
+)
+
+#cleaning the dataset
+data_2021 <- dhs2019_21 |>
+  rename(region = bihar) |>
+  select(region, emo1:control6) |>
+  mutate(region = case_when(
+    region == 1 ~ "Bihar",
+    region == 0 ~ "Jharkhand")) 
+
+varnames <- names(data_2021)[-1]
+
+data_2021_renamed <- data_2021 |> 
+  rename_with(~ labels, .cols = all_of(varnames))
+
+Mean <- function(x) mean(x, na.rm = TRUE)
+SD   <- function(x) sd(x, na.rm = TRUE)
+
+#running the bihar vs jharkhand 2021 table
+datasummary(All(data_2021_renamed) ~ region * (Mean + SD), 
+            data = data_2021,
+            output = "kableExtra",
+            title = "Descriptive Statistics of Key Variables by State (Bihar vs. Jharkhand, 2019/21)") |>
+   kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+  
+#checking the t stat and p value
+vars_21 <- data_2021_renamed |>
+  select(where(is.numeric)) |>
+  names()
+
+# Run t-tests by state and create tidy table
+results_df_21 <- vars_21 |>
+  lapply(function(v) {
+    t <- t.test(data_2021_renamed[[v]] ~ data_2021_renamed$region)
+    data.frame(
+      variable = v,
+      mean_diff = diff(t$estimate),  
+      p_value = t$p.value
+    )
+  }) |>
+  bind_rows()
+
+results_df_21 |> 
+  `row.names<-`(NULL) |>  
+  kbl(title = "T-Test Results by State (Bihar vs. Jharkhand, 2019/21)",
+      col.names = c("Variable Name", "Mean Diff", "P Value")) |>
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+
+```
+
+## Question Two
+
+### 2015/16
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+#creating labels
+q2_labels <- c(
+  "Husband/ Partner Drinks Alcohol", "Frequency of Husband/ Partner Being Drunk")
+
+#cleaning the dataset
+q2_data_2016 <- dhs2015_16 |>
+  rename(region = bihar) |>
+  select(region, alco_cons, alco_f) |>
+  mutate(region = case_when(
+    region == 1 ~ "Bihar",
+    region == 0 ~ "Jharkhand")) 
+
+q2_varnames <- names(q2_data_2016)[-1]
+
+q2_data_2016_renamed <- q2_data_2016 |> 
+  rename_with(~ q2_labels, .cols = all_of(q2_varnames))
+
+Mean <- function(x) mean(x, na.rm = TRUE)
+SD   <- function(x) sd(x, na.rm = TRUE)
+
+#running the bihar vs jharkhand 2016 table
+datasummary(All(q2_data_2016_renamed) ~ region * (Mean + SD), 
+            data = q2_data_2016,
+            output = "kableExtra",
+            title = "Alcohol Use and Drunkenness by State (Bihar vs. Jharkhand, 2015/16)") |>
+   kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+  
+
+#checking the t stat and p value
+q2_vars <- q2_data_2016_renamed |>
+  select(where(is.numeric)) |>
+  names()
+
+# Run t-tests by state and create tidy table
+q2_results_df <- q2_vars |>
+  lapply(function(v) {
+    t <- t.test(q2_data_2016_renamed[[v]] ~ q2_data_2016_renamed$region)
+    data.frame(
+      variable = v,
+      mean_diff = diff(t$estimate),  
+      p_value = t$p.value
+    )
+  }) |>
+  bind_rows()
+
+q2_results_df |> 
+  `row.names<-`(NULL) |>  
+  kbl(caption = "T-Test Results Comparing Alcohol Consumption and Frequency of Drunkenness by State (Bihar vs. Jharkhand, 2015/16/)",
+      col.names = c("Variable Name", "Mean Diff", "P Value")) |>
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+
+```
+
+### 2019/21
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+#creating labels
+q2_labels <- c(
+  "Husband/ Partner Drinks Alcohol", "Frequency of Husband/ Partner Being Drunk")
+
+#cleaning the dataset
+q2_data_2021 <- dhs2019_21 |>
+  rename(region = bihar) |>
+  select(region, alco_cons, alco_f) |>
+  mutate(region = case_when(
+    region == 1 ~ "Bihar",
+    region == 0 ~ "Jharkhand")) 
+
+q2_varnames <- names(q2_data_2021)[-1]
+
+q2_data_2021_renamed <- q2_data_2021 |> 
+  rename_with(~ q2_labels, .cols = all_of(q2_varnames))
+
+Mean <- function(x) mean(x, na.rm = TRUE)
+SD   <- function(x) sd(x, na.rm = TRUE)
+
+#running the bihar vs jharkhand 2021 table
+datasummary(All(q2_data_2021_renamed) ~ region * (Mean + SD), 
+            data = q2_data_2021,
+            output = "kableExtra",
+            title = "Alcohol Use and Drunkenness by State (Bihar vs. Jharkhand, 2019/21)") |>
+   kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+  
+
+#checking the t stat and p value
+q2_vars <- q2_data_2021_renamed |>
+  select(where(is.numeric)) |>
+  names()
+
+# Run t-tests by state and create tidy table
+q2_results_df <- q2_vars |>
+  lapply(function(v) {
+    t <- t.test(q2_data_2021_renamed[[v]] ~ q2_data_2021_renamed$region)
+    data.frame(
+      variable = v,
+      mean_diff = diff(t$estimate),  
+      p_value = t$p.value
+    )
+  }) |>
+  bind_rows()
+
+q2_results_df |> 
+  `row.names<-`(NULL) |>  
+  kbl(caption = "T-Test Results Comparing Alcohol Consumption and Frequency of Drunkenness by State (Bihar vs. Jharkhand, 2019/21)",
+      col.names = c("Variable Name", "Mean Diff", "P Value")) |>
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+
+```
+
+## Question Three
+
+Prior to the alcohol ban, Bihar showed a higher prevalence of intimate partner violence (IPV) across nearly all measures. Physical, emotional, and sexual IPV were consistently higher in Bihar than in Jharkhand. For example:
+
+-   Ever slapped: Bihar 0.34 vs Jharkhand 0.20
+
+-   Ever pushed/shaken/thrown: Bihar 0.20 vs Jharkhand 0.09
+
+-   Insists on knowing where respondent is: Bihar 0.44 vs Jharkhand 0.24
+
+Sexual IPV was generally lower overall, but still consistently higher in Bihar. However, this may be partly influenced by reporting bias: since marital rape is not illegal in India, women may face additional barriers in recognizing such abuse. That does not take away from the overall paper, it is however, important to recognize any potential gaps they may have faced.
+
+Control and financial abuse were also more common, which suggests that economic control may have been more prevalent in Bihar. The higher variance (SD) in Bihar indicates more heterogeneity in experiences: some women experienced very high levels of IPV, while others experienced very little.
+
+After the alcohol ban, Bihar still generally had higher IPV rates than Jharkhand, but the gaps have narrowed significantly. Looking at the same examples:
+
+-   Ever pushed/shaken/thrown: Bihar 0.14 vs Jharkhand 0.13 (pre-ban: 0.20 vs 0.09)
+
+-   Insists on knowing where respondent is: Bihar 0.31 vs Jharkhand 0.30 (pre-ban: 0.44 vs 0.24)
+
+These examples show substantial reductions. In general, Bihar’s means decreased across most indicators post-ban, while Jharkhand remained the same or increased slightly, suggesting that other factors beyond alcohol may contribute to IPV there.
+
+Overall, the narrowing gap between Bihar and Jharkhand suggests that the alcohol ban may have helped reduce IPV, particularly physical violence, while emotional and controlling behaviors remain more persistent. This supports the author’s main hypothesis that alcohol contributed to higher IPV rates in Bihar and that the alcohol prohibition helped reduce IPV.
+
+## Question Four
+
+### 2015/16
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+#creating labels
+q4_labels <- c("Respondent's Age", "Respondent's Education", "Religion", "Caste", "Place of Residence", "Number of Children", "Wealth Index")
+
+#cleaning the dataset
+q4_data_2016 <- dhs2015_16 |>
+  rename(region = bihar) |>
+  select(region, resp_age, resp_edu, religion, caste, place_residence, children, wealth_index) |>
+  mutate(region = case_when(
+    region == 1 ~ "Bihar",
+    region == 0 ~ "Jharkhand")) 
+
+q4_varnames <- names(q4_data_2016)[-1]
+
+q4_data_2016_renamed <- q4_data_2016 |> 
+  rename_with(~ q4_labels, .cols = all_of(q4_varnames))
+
+Mean <- function(x) mean(x, na.rm = TRUE)
+SD   <- function(x) sd(x, na.rm = TRUE)
+
+#running the bihar vs jharkhand 2016 table
+datasummary(All(q4_data_2016_renamed) ~ region * (Mean + SD), 
+            data = q4_data_2016,
+            output = "kableExtra",
+            title = "Descriptive Statistics of Demographic Information by State (Bihar vs. Jharkhand, 2015/16)") |>
+   kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+  
+#checking the t stat and p value
+q4_vars <- q4_data_2016_renamed |>
+  select(where(is.numeric)) |>
+  names()
+
+# Run t-tests by state and create tidy table
+q4_results_df <- q4_vars |>
+  lapply(function(v) {
+    t <- t.test(q4_data_2016_renamed[[v]] ~ q4_data_2016_renamed$region)
+    data.frame(
+      variable = v,
+      mean_diff = diff(t$estimate),  
+      p_value = t$p.value
+    )
+  }) |>
+  bind_rows()
+
+q4_results_df |> 
+  `row.names<-`(NULL) |>  
+  kbl(caption = "T-Test Demographic Results by State (Bihar vs. Jharkhand, 2015/16)",
+      col.names = c("Variable Name", "Mean Diff", "P Value")) |>
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+
+```
+
+### 2019/21
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+#creating labels
+q4_labels <- c("Respondent's Age", "Respondent's Education", "Religion", "Caste", "Place of Residence", "Number of Children", "Wealth Index")
+
+#cleaning the dataset
+q4_data_2021 <- dhs2019_21 |>
+  rename(region = bihar) |>
+  select(region, resp_age, resp_edu, religion, caste, place_residence, children, wealth_index) |>
+  mutate(region = case_when(
+    region == 1 ~ "Bihar",
+    region == 0 ~ "Jharkhand")) 
+
+q4_varnames <- names(q4_data_2021)[-1]
+
+q4_data_2021_renamed <- q4_data_2021 |> 
+  rename_with(~ q4_labels, .cols = all_of(q4_varnames))
+
+Mean <- function(x) mean(x, na.rm = TRUE)
+SD   <- function(x) sd(x, na.rm = TRUE)
+
+#running the bihar vs jharkhand 2016 table
+datasummary(All(q4_data_2021_renamed) ~ region * (Mean + SD), 
+            data = q4_data_2021,
+            output = "kableExtra",
+            title = "Descriptive Statistics of Demographic Information by State (Bihar vs. Jharkhand, 2019/21)") |>
+   kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+  
+#checking the t stat and p value
+q4_vars <- q4_data_2021_renamed |>
+  select(where(is.numeric)) |>
+  names()
+
+# Run t-tests by state and create tidy table
+q4_results_df <- q4_vars |>
+  lapply(function(v) {
+    t <- t.test(q4_data_2021_renamed[[v]] ~ q4_data_2021_renamed$region)
+    data.frame(
+      variable = v,
+      mean_diff = diff(t$estimate),  
+      p_value = t$p.value
+    )
+  }) |>
+  bind_rows()
+
+q4_results_df |> 
+  `row.names<-`(NULL) |>  
+  kbl(caption = "T-Test Demographic Results by State (Bihar vs. Jharkhand,  2019/21)",
+      col.names = c("Variable Name", "Mean Diff", "P Value")) |>
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+
+```
+
+## Question Five
+
+While the demographics of Bihar and Jharkhand are generally similar, which is expected given their shared history, a few differences stand out. Prior to the ban, respondents in Bihar had an average of only 3.74 years of education compared to 4.80 in Jharkhand, over a year higher. A larger proportion of people in Jharkhand belonged to a higher caste. Bihar also had more children on average and a slightly lower wealth index.
+
+These socioeconomic differences can influence both the outcome and the main explanatory variable in important ways. Lower education, higher numbers of children, and lower household income are all factors that research suggests are associated with a greater risk of IPV.
+
+At the same time, poverty and economic stress can also affect alcohol consumption patterns, which is the main variable of interest in this study. This means that differences in wealth, education, and household composition could simultaneously shape both the likelihood of experiencing abuse and the prevalence or impact of alcohol use. Because of these demographic and economic differences, it is unsurprising that prior to the ban, that Bihar demonstrated higher rates of IPV as these covariates may confound or amplify the relationship between alcohol availability and IPV.
+
+Following the ban of alcohol Bihar continued to have slightly higher socioeconomic disadvantage compared to Jharkhand, with lower education, more children, and less representation in urban areas. These factors are likely positively correlated with greater vulnerability to IPV, meaning they can influence both the risk of abuse and patterns of alcohol use. Even though the alcohol ban may have reduced IPV, these persistent socioeconomic differences highlight that structural factors like poverty and education continue to play an important role in shaping outcomes.
+
+## Question Six
+
+$$
+Y= \beta\_{0} + \beta\_{1}Bihar +\eta
+$$
+
+## Question Seven
+
+The results show a small negative relationship: as women get older, their chances of being humiliated go down a little bit (about 0.001 per year). Over ten years, that only adds up to a change of 0.01, thus it’s not a sizeable effect.
+
+The model technically comes out significant because the sample size is so large, but age on its own barely explains any of the variation (R² = 0.001). Basically, age isn’t a strong predictor of humiliation experiences by itself. The standard error was 0.000, which means that there is no spread or variation in the data across the sample. While the age coefficient is precisely estimated, its effect in practice is negligible.
+
+This makes sense when you think about it. If a woman experiences IPV or humiliation over a long period of time, she may become desensitized or begin to normalize it, which makes her less likely to identify or report those experiences as humiliating. A younger woman, on the other hand, might be more sensitive to these behaviors and therefore more willing to label and report them as humiliation.
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+age_on_ipv <- lm(emo1 ~ resp_age, data = dhs2015_16)
+
+modelsummary(age_on_ipv, 
+             output = "kableExtra",
+             title = "Effect of Age on Reported IPV Without Controlling for Education",
+             col.names = c("", "")) 
+            
+```
+
+## Question Eight
+
+A more educated woman is generally less likely to experience IPV, since education can provide financial independence and greater bargaining power within relationships. Uneducated women, especially those who reside in a rural area, may hhave less opportunity to provide for themselves financially, which would make it more difficult to leave an abusive situation. This suggests that education would likely carry a negative coefficient in the model. However, if age is not controlled for alongside education, the effect of age may be overestimated. Given that the coefficient on age was only -0.001, it is possible that without accounting for education, the model is capturing some of education’s protective effect. In that case, the “true” relationship between age and humiliation could even be slightly positive once education is included.
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+```
+
+## Question Nine
+
+When education is accounted for, the coefficient on age is -0.002. This means that for each additional year of age, the predicted likelihood of experiencing IPV decreases by 0.002, holding education constant. Although still a minimal effect, controlling for education reveals a slightly stronger protective effect of age. This aligns with our expectation that older women are somewhat less likely to be humiliated by their partner, independent of educational differences.
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+age_educ_on_ipv <- lm(emo1 ~ resp_age + resp_edu, data = dhs2015_16)
+
+modelsummary(age_educ_on_ipv, output = "kableExtra",
+             title = "Effect of Age on Reported IPV While Controlling for Education",
+             col.names = c("", "")) 
+```

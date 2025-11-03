@@ -1,0 +1,222 @@
+---
+title: "Data Assignment 2"
+author: "Zaeda Peter"
+output:
+  pdf_document:
+    extra_dependencies: ["float"]
+  word_document: default
+  html_document: default
+editor_options:
+  chunk_output_type: console
+header-includes:
+  - \usepackage{float}
+  - \floatplacement{figure}{H}
+  - \floatplacement{table}{H}
+bibliography: references.bib
+---
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+#bringing in all libraries
+library(haven)
+library(tidyverse)
+library(stargazer)
+library(modelsummary)
+library(estimatr)
+library(lmtest)
+library(car)
+library(ggpubr)
+library(rstatix)
+library(tinytable)
+library(kableExtra)
+library(tinytex)
+library(psych)
+library(mfx)
+library(sandwich)
+library(margins)
+
+#import datasets
+dhs2015_16 <- read_dta("dhs2015-16.dta")
+dhs2019_21 <- read_dta("dhs2019-21.dta")
+```
+
+## Question One
+
+In the linear regression, the coefficient on Bihar (0.126, p\<0.001) means that, holding all other factors constant, women living in Bihar are about 12.6 percentage points more likely to experience IPV than women in Jharkhand after controlling for all other variables. The robust standard error (0.012) confirms this estimate is highly statistically significant and not driven by heteroskedasticity, especially as it was significant at a pvalue of 0.001.
+
+## Question Two
+
+In the linear regression, the coefficient on the Bihar dummy was 0.126 (SE = 0.012), indicating that respondents in Bihar have, on average, a 0.126 higher IPV score than respondents in other states, holding all other factors constant.
+
+In the probit model, the coefficient on the Bihar dummy was 0.409 (SE=0.37). This implies that being from Bihar substantially increases the probability of experiencing IPV, compared to respondents outside Bihar. Essentially, both models are saying the same thing, being from Bihar means that you're more likely to experience IPV. It was more difficult to compare as the magnitude is not as easily comparable as looking at percentages or percentage points.
+
+## Question Three
+
+When converting the probit results into Average Marginal Effects (AME = 0.122), the interpretation aligns closely with the linear model. Both indicate that women in Bihar are roughly 12–12.5 percentage points more likely to experience IPV than women in Jharkhand. This consistency across these two approaches shows that the higher IPV risk in Bihar is a robust and statistically significant finding, regardless of model specification. Utilizing the average marginal effects probit model is more easily comparable with the OLS and would be my preferred model.
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+#initial linear regression
+q1_lm <- lm(ipv_d ~ resp_age + resp_edu + religion + caste + children + year_marr + hhd_age + husb_edu + wealth_index + place_residence + bihar, data = dhs2015_16)
+
+q1_glm <- glm(ipv_d ~ resp_age + resp_edu + religion + caste + children + year_marr + hhd_age + husb_edu + wealth_index + place_residence + bihar, 
+             family = binomial(link = "probit"),
+             data = dhs2015_16)
+
+#printing out all the models
+all_models_15 <- list(
+  "Robust SE" = coeftest(q1_lm, vcov = vcovHC(q1_lm, type = 'HC0')),
+  "Probit" = glm(ipv_d ~ resp_age + resp_edu + religion + caste + children + year_marr + hhd_age + husb_edu + wealth_index + place_residence + bihar, 
+             family = binomial(link = "probit"),
+             data = dhs2015_16),
+  "AME for Probit" = margins(q1_glm))
+
+modelsummary(
+  all_models_15,
+  output = "kableExtra",
+  title = "2015/16 Comparison of Linear and Probit Model Estimates",
+  coef_rename = c(
+    "resp_age" = "Respondent's Age",
+    "resp_edu" = "Respondent's Education",
+    "religion" = "Religion",
+    "caste" = "Caste",
+    "children" = "Kids <5",
+    "year_marr" = "Years Cohabitated",
+    "hhd_age" = "HH Age",
+    "husb_edu" = "Husband's Education",
+    "wealth_index" = "Wealth Index",
+    "place_residence" = "Rural/Urban",
+    "bihar" = "Bihar"),
+  fmt = 3,       # 3 decimal places
+  stars = TRUE   # adds significance stars
+) |>
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+```
+
+## Question Four
+
+In the linear regression, the coefficient on Bihar (0.100, p\<0.001) indicates that, holding all other factors constant, women living in Bihar are about 10 percentage points more likely to experience IPV than women in Jharkhand after controlling for all other variables. This represents a decrease compared to the figure in 2015/16. While women from Bihar are still more likely to experience IPV than their Jharkhand counterparts, the likelihood has declined over time.
+
+In the probit model, the coefficient on the Bihar dummy was 0.307 (SE = 0.038), also lower than the figure in 2015/16. This suggests that while being from Bihar still carries a relatively high probability of experiencing IPV, the risk has decreased year to year.
+
+When converted into Average Marginal Effects (AME = 0.097), the result aligns closely with the linear model, confirming that the higher IPV risk in Bihar is robust and statistically significant across specifications. The AME of the probit model remains the preferred method for comparing probabilities, as it provides a direct and interpretable measure of the change in IPV likelihood.
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+#initial linear regression
+q4_lm <- lm(ipv_d ~ resp_age + resp_edu + religion + caste + children + year_marr + hhd_age + husb_edu + wealth_index + place_residence + bihar, data = dhs2019_21)
+
+q4_glm <- glm(ipv_d ~ resp_age + resp_edu + religion + caste + children + year_marr + hhd_age + husb_edu + wealth_index + place_residence + bihar, 
+             family = binomial(link = "probit"),
+             data = dhs2019_21)
+
+#printing out all the models
+all_models_19 <- list(
+  "Robust SE" = coeftest(q4_lm, vcov = vcovHC(q1_lm, type = 'HC0')),
+  "Probit" = glm(ipv_d ~ resp_age + resp_edu + religion + caste + children + year_marr + hhd_age + husb_edu + wealth_index + place_residence + bihar, 
+             family = binomial(link = "probit"),
+             data = dhs2019_21),
+  "AME for Probit" = margins(q4_glm))
+
+modelsummary(
+  all_models_19,
+  output = "kableExtra",
+  title =  "2019/21 Comparison of Linear and Probit Model Estimates",
+  coef_rename = c(
+    "resp_age" = "Respondent's Age",
+    "resp_edu" = "Respondent's Education",
+    "religion" = "Religion",
+    "caste" = "Caste",
+    "children" = "Kids <5",
+    "year_marr" = "Years Cohabitated",
+    "hhd_age" = "HH Age",
+    "husb_edu" = "Husband's Education",
+    "wealth_index" = "Wealth Index",
+    "place_residence" = "Rural/Urban",
+    "bihar" = "Bihar"),
+  fmt = 3,       # 3 decimal places
+  stars = TRUE   # adds significance stars
+) |>
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+```
+
+## Question Five
+
+Table 3: Comparing the Coefficients on Bihar
+
+|                      | 2015/16 | 2019/21 |
+|----------------------|---------|---------|
+| Robust SE            | 0.126   | 0.126   |
+| Probit Model         | 0.409   | 0.307   |
+| AME for Probit Model | 0.122   | 0.097   |
+
+Using the linear model with robust standard errors, the coefficient for Bihar remained constant across both periods (0.126). However, when using the average marginal effects (AME) from the probit model, that provided a clearer probability interpretation. In 2015/16, a woman in Bihar was about 12.2 percentage points more likely to experience IPV than a woman in Jharkhand. By 2019/21, this figure decreased to 9.7 percentage points, suggesting that the probability of her experiencing IPV was lower. This decline is consistent with the introduction of the alcohol ban, which a link between reduced alcohol consumption and lower intimate partner violence, which was the conclusion that the authors of the paper had arrived to.
+
+## Question Six
+
+The results for Jharkhand remained relatively consistent between 2015 and 2019, as expected, since it effectively served as the control group and did not experience the alcohol ban. In contrast, there was a more noticeable change for Bihar. For our woman with fairly average characteristics, the predicted probability of experiencing IPV decreased from 0.818 in 2015 to 0.790 in 2019, which suggests that the alcohol ban may have contributed to a modest reduction in IPV risk.
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+#finding the averages from 2015
+avg_2015 <- dhs2015_16 |>
+  summarize(
+    avg_age = mean(resp_age),
+    avg_edu = mean(resp_edu),
+    avg_marr = mean(year_marr),
+    avg_hhd = mean(hhd_age),
+    avg_husb_edu = mean(husb_edu, na.rm = TRUE))
+
+#basic sample woman creation   
+q6_woman = data.frame(resp_age = 31.47566, resp_edu = 4.154719, year_marr = 13.57612, hhd_age = 44.29824, husb_edu = 6.367067, religion = 1, caste = 0, place_residence = 0, children = 1, wealth_index = 2)
+
+#probit 2015
+probit_15<- glm(ipv_d ~ resp_age + resp_edu + religion + caste + children + year_marr + hhd_age + husb_edu + wealth_index + place_residence + bihar, family = binomial(link = "probit"), data = dhs2015_16)
+
+#if she was in bihar in 2015
+q6_15_bihar <- q6_woman |>
+  mutate(bihar = 1)
+
+bihar_15 = data.frame(probs = predict(probit_15, newdata = q6_15_bihar, type = "response"))
+
+#if she was in jharkhand in 2015
+q6_15_jhark <- q6_woman |>
+  mutate(bihar = 0)
+
+jhark_15 = data.frame(probs = predict(probit_15, newdata = q6_15_jhark, type = "response"))
+
+#probit 2019
+probit_19 <- glm(ipv_d ~ resp_age + resp_edu + religion + caste + children + year_marr + hhd_age + husb_edu + wealth_index + place_residence + bihar, family = binomial(link = "probit"), data = dhs2019_21)
+
+#if she was in bihar in 2019
+q6_19_bihar <- q6_woman |>
+  mutate(bihar = 1)
+
+bihar_19 = data.frame(probs = predict(probit_19, newdata = q6_19_bihar, type = "response"))
+
+#if she was in jharkhand in 2015
+q6_19_jhark <- q6_woman |>
+  mutate(bihar = 0)
+
+jhark_19 = data.frame(probs = predict(probit_19, newdata = q6_19_jhark, type = "response"))
+
+# adding all to one table
+four_cases <- tibble(Probability = c(bihar_15, jhark_15, bihar_19, jhark_19), 
+                     Period = c("Bihar 2015", "Jharkhand 2015", "Bihar 2019", "Jharkhand 2019"))
+  
+# printing table
+kable(four_cases, caption = "Predicted Probabilities Across the Four Cases", booktabs = TRUE) |>
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+
+
+
+
+
+```
+
+## References
+
+I worked alongside Ben, Allison and Sophia to compare my answers against theirs.
+
+ChatGPT was also utilized in order to debug coding.
+
+[@arel-bundock2022; @motivati; @bobbitt2022; @lillis2014; @probitr; @rextrac; @schmelzer; @toolsfo]
