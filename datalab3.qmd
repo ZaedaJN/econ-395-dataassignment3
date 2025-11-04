@@ -211,7 +211,7 @@ dhs_both_3$psvalue <- predict(ps, type = "response")
 dhs_both_3$weight.ATE <- ifelse(dhs_both$group == 1, 1/dhs_both$psvalue, 1/(1 - dhs_both$psvalue))
 
 #step 6: outcomes analysis using propensity scores as weights in a weighted regression
-q3.ATE <- glm(group ~ resp_age + resp_edu + year_marr + religion + caste + husb_edu + hh_size +
+glm(group ~ resp_age + resp_edu + year_marr + religion + caste + husb_edu + hh_size +
     hhd_age + hhd_gender + place_residence + 
     poorest + poorer + middle + richer + 
     age_wi1 + age_wi2 + age_wi3 + age_wi4 +
@@ -220,21 +220,25 @@ q3.ATE <- glm(group ~ resp_age + resp_edu + year_marr + religion + caste + husb_
     caste_relg + resp_marriage + 
     rel_wi1 + rel_wi2 + rel_wi3 + rel_wi4, 
              family = binomial(link = "probit"),
-             data = dhs_both_3, weights = (weight.ATE))
+             data = dhs_both_3, weights = (weight.ATE)) |>
+  tbl_regression(exponentiate = TRUE)
+
 summary(q3.ATE)
 
 #table time?
 q3_list <- list(q3.ATE)
 
-modelsummary(
-  q3_list,
-  output = "kableExtra",
-  title =  "Propensity Weighted",
-  fmt = 3,       # 3 decimal places
-  stars = TRUE   # adds significance stars
-) |>
-  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+q3_tidy <- tidy(q3.ATE)
+kable(q3_tidy, caption = "weighted")
 
+
+
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+  
+library(gtsummary)
+library(broom.helpers)
+  
+tbl_regression(q3.ATE)
 
               
 
