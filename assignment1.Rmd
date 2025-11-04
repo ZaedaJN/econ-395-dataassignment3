@@ -53,7 +53,7 @@ labels <- c(
 #cleaning the dataset
 data_2016 <- dhs2015_16 |>
   rename(region = bihar) |>
-  select(region, emo1:control6) |>
+  dplyr::select(region, emo1:control6) |>
   mutate(region = case_when(
     region == 1 ~ "Bihar",
     region == 0 ~ "Jharkhand")) 
@@ -75,7 +75,7 @@ datasummary(All(data_2016_renamed) ~ region * (Mean + SD),
   
 #checking the t stat and p value
 vars <- data_2016_renamed |>
-  select(where(is.numeric)) |>
+  dplyr::select(where(is.numeric)) |>
   names()
 
 # Run t-tests by state and create tidy table

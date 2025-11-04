@@ -1,0 +1,176 @@
+---
+title: "Data Assignment 3"
+author: "Zaeda Peter"
+output:
+  pdf_document:
+    extra_dependencies: ["float"]
+  word_document: default
+  html_document: default
+editor_options:
+  chunk_output_type: console
+header-includes:
+  - \usepackage{float}
+  - \floatplacement{figure}{H}
+  - \floatplacement{table}{H}
+bibliography: references.bib
+---
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+#bringing in all libraries
+library(haven)
+library(tidyverse)
+library(stargazer)
+library(modelsummary)
+library(estimatr)
+library(lmtest)
+library(car)
+library(ggpubr)
+library(rstatix)
+library(tinytable)
+library(kableExtra)
+library(tinytex)
+library(psych)
+library(mfx)
+library(sandwich)
+library(margins)
+library(fastDummies)
+library(dplyr)
+
+#import datasets
+dhs2015_16 <- read_dta("dhs2015-16.dta")
+dhs2019_21 <- read_dta("dhs2019-21.dta")
+
+```
+
+### Part A - Covariate Balance
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+#designating as treatment vs control prior to joining
+dhs2015_16 <- dhs2015_16 |>
+  mutate(group = case_when(
+    bihar == 1 ~ "Treatment",
+    bihar == 0 ~ "Control")) 
+
+dhs2019_21 <- dhs2019_21 |>
+  mutate(group = case_when(
+    bihar == 1 ~ "Control",
+    bihar == 0 ~ "Control")) 
+
+#combining both data sats
+dhs_both <- bind_rows(dhs2015_16, dhs2019_21)
+
+#creating dummy variables for categorical variables
+dhs_both <- dummy_cols(dhs_both, select_columns = "wealth_index") 
+dhs_both <- dummy_cols(dhs_both, select_columns = "caste") 
+dhs_both <- dummy_cols(dhs_both, select_columns = "religion")
+
+#creating interaction terms for Respondent's Age x Wealth Index
+dhs_both <- dhs_both |>
+  mutate(age_wi1 = resp_age * poorest,
+         age_wi2 = resp_age * poorer,
+         age_wi3 = resp_age * middle,
+         age_wi4 = resp_age * richer)
+
+#creating interaction term for Wealth Index x Husband's Education
+dhs_both <- dhs_both |>
+  mutate(husb_wi1 = poorest * husb_edu,
+         husb_wi2 = poorer * husb_edu,
+         husb_wi3 = middle * husb_edu,
+         husb_wi4 = richer * husb_edu)
+
+#creating interaction term for Religion x Wealth Index
+dhs_both <- dhs_both |>
+  mutate(rel_wi1 = religion * poorest,
+         rel_wi2 = religion * poorer,
+         rel_wi3 = religion * middle,
+         rel_wi4 = religion * richer)
+
+#creating interaction terms for Caste x Husband's Education, Religion x Caste, Respondent's Education X Years of Marriage
+dhs_both <- dhs_both |>
+  mutate(caste_husb = caste * husb_edu,
+         caste_relg = caste * religion,
+         resp_marriage = resp_edu * year_marr)
+
+#dropping Husband's education and selecting only the relevant columns
+dhs_both <- dhs_both |>
+   dplyr::select(
+    resp_age, resp_edu, year_marr, religion, caste, husb_edu, hh_size,
+    hhd_age, hhd_gender, place_residence, 
+    poorest, poorer, middle, richer, 
+    age_wi1, age_wi2, age_wi3, age_wi4,
+    caste_husb, 
+    husb_wi1, husb_wi2, husb_wi3, husb_wi4, 
+    caste_relg, resp_marriage, 
+    rel_wi1, rel_wi2, rel_wi3, rel_wi4,
+    group
+  ) |>
+  drop_na(husb_edu)
+
+#labels for the columns
+labels <- c(
+  "Respondent's age", "Respondent's education", "Years since marriage", "Religion (Hindu = 1)", "Caste (SC/ST = 1)", "Husband's Education", "Houshold size", "Household head's age", "Household head's gender", "Place of residence", 
+  
+  "Poorest", "Poorer", "Middle", "Richer", 
+  
+  "Age x Poorest", "Age x Poorer", "Age x Middle", "Age x Richer",
+  
+  "Caste x Husband's Education", 
+  
+  "Poorest x Husband's Education", "Poorer x Husband's Education",  "Middle x Husband's Education",  "Richer x Husband's Education",
+  
+  "Religion x Caste", "Respondent's Education x Years Since Marriage", 
+  
+  "Hindu x Poorest", "Hindu x Poorer", "Hindu x Middle", "Hindu x Richer",
+  
+  "Group"
+  
+)
+
+#running fake table 2
+varnames <- names(dhs_both)
+
+dhs_both_renamed <- dhs_both |> 
+  rename_with(~ labels, .cols = all_of(varnames))
+
+
+datasummary_balance(~ Group, dhs_both_renamed, 
+                    dinm_statistic = "p.value",
+                    stars = TRUE,
+                    fmt = fmt_sprintf("%.3f"),
+                    output = "kableExtra",
+                    title = "Covariate Summary Statistics") |>
+   kable_styling(full_width = FALSE, 
+                 bootstrap_options = c("striped", "hover"))
+
+
+
+```
+### Part B - Propensity Score Weighting
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+#estimating probit model
+
+probit_b <- glm(group ~ resp_age + resp_edu + year_marr + religion + caste + husb_edu + hh_size +
+    hhd_age + hhd_gender + place_residence + 
+    poorest + poorer + middle + richer + 
+    age_wi1 + age_wi2 + age_wi3 + age_wi4 +
+    caste_husb+
+    husb_wi1 + husb_wi2 + husb_wi3 + husb_wi4 + 
+    caste_relg + resp_marriage + 
+    rel_wi1 + rel_wi2 + rel_wi3 + rel_wi4, 
+             family = binomial(link = "probit"),
+             data = dhs_both)
+
+## model summary
+summary(myprobit)
+
+```
+
+### Part C - Difference in Difference Estimation
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+```
+
+### Part d - Instrumental Variables Regression
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+```
