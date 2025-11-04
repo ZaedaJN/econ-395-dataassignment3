@@ -36,6 +36,12 @@ library(margins)
 library(fastDummies)
 library(dplyr)
 
+#packages from Propensity Guide
+library(gbm)
+library(rms)
+library(MatchIt)
+
+
 #import datasets
 dhs2015_16 <- read_dta("dhs2015-16.dta")
 dhs2019_21 <- read_dta("dhs2019-21.dta")
@@ -43,18 +49,21 @@ dhs2019_21 <- read_dta("dhs2019-21.dta")
 ```
 
 ### Part A - Covariate Balance
-```{r, echo = FALSE, message = FALSE, warning = FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#| label: Question One
+
+# treatment = 1 & control = 0 
 
 #designating as treatment vs control prior to joining
 dhs2015_16 <- dhs2015_16 |>
   mutate(group = case_when(
-    bihar == 1 ~ "Treatment",
-    bihar == 0 ~ "Control")) 
+    bihar == 1 ~ 1,
+    bihar == 0 ~ 0)) 
 
 dhs2019_21 <- dhs2019_21 |>
   mutate(group = case_when(
-    bihar == 1 ~ "Control",
-    bihar == 0 ~ "Control")) 
+    bihar == 1 ~ 0,
+    bihar == 0 ~ 0)) 
 
 #combining both data sats
 dhs_both <- bind_rows(dhs2015_16, dhs2019_21)
@@ -106,6 +115,7 @@ dhs_both <- dhs_both |>
   ) |>
   drop_na(husb_edu)
 
+
 #labels for the columns
 labels <- c(
   "Respondent's age", "Respondent's education", "Years since marriage", "Religion (Hindu = 1)", "Caste (SC/ST = 1)", "Husband's Education", "Houshold size", "Household head's age", "Household head's gender", "Place of residence", 
@@ -145,25 +155,104 @@ datasummary_balance(~ Group, dhs_both_renamed,
 
 
 ```
-### Part B - Propensity Score Weighting
-```{r, echo = FALSE, message = FALSE, warning = FALSE}
-#estimating probit model
 
-probit_b <- glm(group ~ resp_age + resp_edu + year_marr + religion + caste + husb_edu + hh_size +
+### Part B - Propensity Score Weighting
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#| label: Question Two
+
+
+probit_b <- glm(as.factor(group) ~ resp_age + resp_edu + year_marr + religion + caste + husb_edu + hh_size +
     hhd_age + hhd_gender + place_residence + 
     poorest + poorer + middle + richer + 
     age_wi1 + age_wi2 + age_wi3 + age_wi4 +
-    caste_husb+
+    caste_husb +
     husb_wi1 + husb_wi2 + husb_wi3 + husb_wi4 + 
     caste_relg + resp_marriage + 
     rel_wi1 + rel_wi2 + rel_wi3 + rel_wi4, 
              family = binomial(link = "probit"),
              data = dhs_both)
 
-## model summary
-summary(myprobit)
+#estimating probit model
+probit_b2 <- glm(as.factor(group) ~. family = binomial(link = "probit"),
+             data = dhs_both)
+
+#precited probabilities
+predict_model <- data.frame(predict(probit_b2, type = "response"))
+
+predict_summary <- predict_model |>
+  group_by(group) |>
+  summarize(
+    mean_p = mean()
+  )
+
 
 ```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#| label: Question Three
+
+dhs_both_3 <- dhs_both
+
+#step 3: propensity score estimation
+ps <- glm(group ~ resp_age + resp_edu + year_marr + religion + caste + husb_edu + hh_size +
+    hhd_age + hhd_gender + place_residence + 
+    poorest + poorer + middle + richer + 
+    age_wi1 + age_wi2 + age_wi3 + age_wi4 +
+    caste_husb +
+    husb_wi1 + husb_wi2 + husb_wi3 + husb_wi4 + 
+    caste_relg + resp_marriage + 
+    rel_wi1 + rel_wi2 + rel_wi3 + rel_wi4, 
+             family = binomial(link = "probit"),
+             data = dhs_both_3)
+
+dhs_both_3$psvalue <- predict(ps, type = "response")
+
+#step 4: weight estimation using propensity scores
+dhs_both_3$weight.ATE <- ifelse(dhs_both$group == 1, 1/dhs_both$psvalue, 1/(1 - dhs_both$psvalue))
+
+#step 6: outcomes analysis using propensity scores as weights in a weighted regression
+q3.ATE <- glm(group ~ resp_age + resp_edu + year_marr + religion + caste + husb_edu + hh_size +
+    hhd_age + hhd_gender + place_residence + 
+    poorest + poorer + middle + richer + 
+    age_wi1 + age_wi2 + age_wi3 + age_wi4 +
+    caste_husb +
+    husb_wi1 + husb_wi2 + husb_wi3 + husb_wi4 + 
+    caste_relg + resp_marriage + 
+    rel_wi1 + rel_wi2 + rel_wi3 + rel_wi4, 
+             family = binomial(link = "probit"),
+             data = dhs_both_3, weights = (weight.ATE))
+summary(q3.ATE)
+
+#table time?
+q3_list <- list(q3.ATE)
+
+modelsummary(
+  q3_list,
+  output = "kableExtra",
+  title =  "Propensity Weighted",
+  fmt = 3,       # 3 decimal places
+  stars = TRUE   # adds significance stars
+) |>
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+
+
+              
+
+
+```
+ coef_rename = c(
+    "resp_age" = "Respondent's Age",
+    "resp_edu" = "Respondent's Education",
+    "religion" = "Religion",
+    "caste" = "Caste",
+    "children" = "Kids <5",
+    "year_marr" = "Years Cohabitated",
+    "hhd_age" = "HH Age",
+    "husb_edu" = "Husband's Education",
+    "wealth_index" = "Wealth Index",
+    "place_residence" = "Rural/Urban",
+    "bihar" = "Bihar"),
+
 
 ### Part C - Difference in Difference Estimation
 ```{r, echo = FALSE, message = FALSE, warning = FALSE}
