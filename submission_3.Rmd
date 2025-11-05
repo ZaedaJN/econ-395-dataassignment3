@@ -1,12 +1,7 @@
 ---
 title: "Data Assignment 3"
-author: "Zaeda Peter"
-output:
-  pdf_document: default
-  word_document: default
-  html_document: default
-editor_options:
-  chunk_output_type: console
+output: pdf_document
+date: "2025-11-05"
 header-includes:
   - \usepackage{float}
   - \floatplacement{figure}{H}
@@ -143,8 +138,6 @@ varnames <- names(dhs_both_1)
 dhs_both_renamed <- dhs_both_1 |> 
   rename_with(~ labels, .cols = all_of(varnames))
 
-summary(dhs_both_renamed)
-
 datasummary_balance(~ Treatment, dhs_both_renamed, 
                     dinm_statistic = "p.value",
                     stars = TRUE,
@@ -229,8 +222,6 @@ varnames_3 <- varnames_3[1:(length(varnames_3)-2)]
 dhs_both_renamed_3 <- dhs_both_3 |> 
   rename_with(~ labels, .cols = all_of(varnames_3))
 
-summary(dhs_both_renamed_3)
-
 #create table
 datasummary_balance(~ Treatment, dhs_both_renamed_3, 
                     dinm_statistic = "p.value",
@@ -248,7 +239,7 @@ datasummary_balance(~ Treatment, dhs_both_renamed_3,
 
 ### Part C - Difference in Difference Estimation
 
-```{r echo=FALSE, message=FALSE, warning=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
 #| label: Question Four
 
 dhs_both_4 <- dhs_both
@@ -293,18 +284,21 @@ did_IPV_robust <- coeftest(did_IPV, vcov. =  vcov_clustered_IPV)
 stargazer(did_IPV ,
           se = list(did_IPV_robust[,2]), 
           digits = 3, 
-          keep = c("bihar", "year", "bihar:year"),
-          dep.var.labels = c("IPV"), 
-          flip = TRUE,
-          table.placement = "H",
-          type = "text", 
-          title = "Effect of Alcohol Ban on IPV", 
-          style = "aer") 
+  keep = c("bihar", "year", "bihar:year"),
+  dep.var.labels = c("IPV"), 
+  title = "Effect of Alcohol Ban on IPV",
+  style = "aer",
+  table.placement = "H",
+  font.size = "small",
+  column.sep.width = "-25pt",
+  type = "latex",
+  flip = TRUE
+)
 
 
 ```
 
-```{r echo=FALSE, message=FALSE, warning=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
 #| label: Question Five
 
 #emotional violence
@@ -362,22 +356,30 @@ did_control_robust <- coeftest(did_control, vcov. =  vcov_clustered_control)
 #making into one section
 library(stargazer)
 
-stargazer(did_emo, did_phy, did_control, did_sex, 
-          se = list(did_emo_robust[,2], 
-                    did_phy_robust[,2], 
-                    did_control_robust[,2], 
-                    did_sex_robust[,2]), 
-          digits = 3, 
-          keep = c("bihar", "year", "bihar:year"),
-          dep.var.labels = c("Emotional", "Physical", "Control", "Sexual"), 
-          flip = TRUE,
-          table.placement = "H",
-          type = "text", 
-          title = "Effect of Alcohol Ban on Different Aspects of IPV", 
-          style = "aer") 
+stargazer(
+  did_emo, did_phy, did_control, did_sex, 
+  se = list(did_emo_robust[,2], 
+            did_phy_robust[,2], 
+            did_control_robust[,2], 
+            did_sex_robust[,2]), 
+  digits = 3, 
+  keep = c("bihar", "year", "bihar:year"),
+  dep.var.labels = c("Emotional", "Physical", "Control", "Sexual"), 
+  title = "Effect of Alcohol Ban on Different Aspects of IPV",
+  style = "aer",
+  table.placement = "H",
+  font.size = "small",
+  column.sep.width = "-25pt",
+  type = "latex",
+  flip = TRUE
+)
 
 
-stargazer(attitude)
+
+          
+          
+           
+         
 ```
 
 
