@@ -29,7 +29,6 @@ library(rstatix)
 library(tinytable)
 library(kableExtra)
 library(tinytex)
-library(psych)
 library(mfx)
 library(sandwich)
 library(margins)
@@ -40,6 +39,7 @@ library(dplyr)
 library(gbm)
 library(rms)
 library(MatchIt)
+library(psych)
 
 
 #import datasets
@@ -56,12 +56,12 @@ dhs2019_21 <- read_dta("dhs2019-21.dta")
 
 #designating as treatment vs control prior to joining
 dhs2015_16 <- dhs2015_16 |>
-  mutate(group = case_when(
+  mutate(Treatment = case_when(
     bihar == 1 ~ 1,
     bihar == 0 ~ 0)) 
 
 dhs2019_21 <- dhs2019_21 |>
-  mutate(group = case_when(
+  mutate(Treatment = case_when(
     bihar == 1 ~ 0,
     bihar == 0 ~ 0)) 
 
@@ -111,7 +111,7 @@ dhs_both <- dhs_both |>
     husb_wi1, husb_wi2, husb_wi3, husb_wi4, 
     caste_relg, resp_marriage, 
     rel_wi1, rel_wi2, rel_wi3, rel_wi4,
-    group
+    Treatment
   ) |>
   drop_na(husb_edu)
 
@@ -132,7 +132,7 @@ labels <- c(
   
   "Hindu x Poorest", "Hindu x Poorer", "Hindu x Middle", "Hindu x Richer",
   
-  "Group"
+  "Treatment"
   
 )
 
@@ -142,8 +142,9 @@ varnames <- names(dhs_both)
 dhs_both_renamed <- dhs_both |> 
   rename_with(~ labels, .cols = all_of(varnames))
 
+summary(dhs_both_renamed)
 
-datasummary_balance(~ Group, dhs_both_renamed, 
+datasummary_balance(~ Treatment, dhs_both_renamed, 
                     dinm_statistic = "p.value",
                     stars = TRUE,
                     fmt = fmt_sprintf("%.3f"),
@@ -160,8 +161,9 @@ datasummary_balance(~ Group, dhs_both_renamed,
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 #| label: Question Two
 
+dhs_both_2 <- dhs_both
 
-probit_b <- glm(as.factor(group) ~ resp_age + resp_edu + year_marr + religion + caste + husb_edu + hh_size +
+probit_b <- glm(Treatment ~ resp_age + resp_edu + year_marr + religion + caste + husb_edu + hh_size +
     hhd_age + hhd_gender + place_residence + 
     poorest + poorer + middle + richer + 
     age_wi1 + age_wi2 + age_wi3 + age_wi4 +
@@ -170,21 +172,28 @@ probit_b <- glm(as.factor(group) ~ resp_age + resp_edu + year_marr + religion + 
     caste_relg + resp_marriage + 
     rel_wi1 + rel_wi2 + rel_wi3 + rel_wi4, 
              family = binomial(link = "probit"),
-             data = dhs_both)
+             data = dhs_both_2)
 
-#estimating probit model
-probit_b2 <- glm(as.factor(group) ~. family = binomial(link = "probit"),
-             data = dhs_both)
+dhs_both_2$prediction <- predict(probit_b, type = "response")
+dhs_both_2$prediction <- as.numeric(dhs_both_2$prediction)
 
 #precited probabilities
-predict_model <- data.frame(predict(probit_b2, type = "response"))
-
-predict_summary <- predict_model |>
-  group_by(group) |>
-  summarize(
-    mean_p = mean()
+dhs_2_summary <- dhs_both_2 |>
+  dplyr::group_by(Treatment) |>
+  dplyr::summarize(
+    `Mean` = mean(prediction),
+    `Median` = median(prediction),
+    `Min` = min(prediction),
+    `Max` = max(prediction)
   )
 
+dhs_2_summary |>
+  kbl(caption = "Summary of Predicted Propensity Scores by Treatment Group") |>
+  kable_styling(
+    full_width = FALSE, 
+    bootstrap_options = c("striped", "hover")
+  )
+  
 
 ```
 
@@ -194,7 +203,7 @@ predict_summary <- predict_model |>
 dhs_both_3 <- dhs_both
 
 #step 3: propensity score estimation
-ps <- glm(group ~ resp_age + resp_edu + year_marr + religion + caste + husb_edu + hh_size +
+ps <- glm(Treatment ~ resp_age + resp_edu + year_marr + religion + caste + husb_edu + hh_size +
     hhd_age + hhd_gender + place_residence + 
     poorest + poorer + middle + richer + 
     age_wi1 + age_wi2 + age_wi3 + age_wi4 +
@@ -206,32 +215,76 @@ ps <- glm(group ~ resp_age + resp_edu + year_marr + religion + caste + husb_edu 
              data = dhs_both_3)
 
 dhs_both_3$psvalue <- predict(ps, type = "response")
+dhs_both_3$psvalue <- as.numeric(dhs_both_3$psvalue)
 
 #step 4: weight estimation using propensity scores
-dhs_both_3$weight.ATE <- ifelse(dhs_both$group == 1, 1/dhs_both$psvalue, 1/(1 - dhs_both$psvalue))
+dhs_both_3$weight.ATE <- ifelse(dhs_both_3$Treatment == 1, 1/dhs_both_3$psvalue, 1/(1 - dhs_both_3$psvalue))
 
 #step 6: outcomes analysis using propensity scores as weights in a weighted regression
-glm(group ~ resp_age + resp_edu + year_marr + religion + caste + husb_edu + hh_size +
-    hhd_age + hhd_gender + place_residence + 
-    poorest + poorer + middle + richer + 
-    age_wi1 + age_wi2 + age_wi3 + age_wi4 +
-    caste_husb +
-    husb_wi1 + husb_wi2 + husb_wi3 + husb_wi4 + 
-    caste_relg + resp_marriage + 
-    rel_wi1 + rel_wi2 + rel_wi3 + rel_wi4, 
-             family = binomial(link = "probit"),
-             data = dhs_both_3, weights = (weight.ATE)) |>
-  tbl_regression(exponentiate = TRUE)
+q3.ATE <- suppressWarnings(
+  glm(Treatment ~ resp_age + resp_edu + year_marr + religion + caste + husb_edu + hh_size +
+        hhd_age + hhd_gender + place_residence + 
+        poorest + poorer + middle + richer + 
+        age_wi1 + age_wi2 + age_wi3 + age_wi4 +
+        caste_husb +
+        husb_wi1 + husb_wi2 + husb_wi3 + husb_wi4 + 
+        caste_relg + resp_marriage + 
+        rel_wi1 + rel_wi2 + rel_wi3 + rel_wi4, 
+      family = binomial(link = "probit"),
+      data = dhs_both_3, 
+      weights = weight.ATE)
+)
+
+q3.ATE$coefficients
 
 summary(q3.ATE)
 
 #table time?
+q3_tidy <- tidy(q3.ATE)
+kable(q3_tidy, caption = "weighted")
+
+varnames_3 <- q3_tidy$term
+
+q3_tidy_renamed <- q3_tidy |> 
+  mutate(term = labels) |>
+  Treatment_by(Treatment)
+
+##########
+model_2 <- list(
+  "weighted" = glm(Treatment ~ resp_age + resp_edu + year_marr + religion + caste + husb_edu + hh_size +
+        hhd_age + hhd_gender + place_residence + 
+        poorest + poorer + middle + richer + 
+        age_wi1 + age_wi2 + age_wi3 + age_wi4 +
+        caste_husb +
+        husb_wi1 + husb_wi2 + husb_wi3 + husb_wi4 + 
+        caste_relg + resp_marriage + 
+        rel_wi1 + rel_wi2 + rel_wi3 + rel_wi4, 
+      family = binomial(link = "probit"),
+      data = dhs_both_3, 
+      weights = weight.ATE))
+
+
+model_2_df <- tidy(model_2)
+
+datasummary_balance(~ Treatment, model_2)
+
+modelsummary(
+  model_2,
+  output = "kableExtra",
+  title =  "Weighted Propensity Scores",
+  fmt = 3,       # 3 decimal places
+  stars = TRUE   # adds significance stars
+) |>
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+
+              
+
+
+```
 q3_list <- list(q3.ATE)
 
 q3_tidy <- tidy(q3.ATE)
 kable(q3_tidy, caption = "weighted")
-
-
 
   kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
   
@@ -240,10 +293,6 @@ library(broom.helpers)
   
 tbl_regression(q3.ATE)
 
-              
-
-
-```
  coef_rename = c(
     "resp_age" = "Respondent's Age",
     "resp_edu" = "Respondent's Education",
